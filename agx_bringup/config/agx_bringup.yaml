@@ -4,7 +4,7 @@ agx_bringup_node:
     pub_odom_tf: false
     odom_frame: 'odom'
     base_frame: 'base_footprint'
-    interface: 'can0'
+    interface: 'can_chassis'
 
     track: 0.34
     wheelbase: 0.39
