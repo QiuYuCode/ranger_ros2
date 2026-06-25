@@ -35,6 +35,9 @@ namespace agx::nav
 
         try
         {
+            if (m_node) {
+                m_interface = m_node->declare_parameter<std::string>("interface", m_interface);
+            }
             if (init_can() && init_frame()) {
                 m_initialized = true;
                 if (m_node) {
