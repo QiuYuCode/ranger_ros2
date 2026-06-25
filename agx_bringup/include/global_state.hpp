@@ -155,11 +155,6 @@ public:
             // 初始化时间戳
             last_update_ = node->now();
 
-            // 设置默认坐标系
-            map_frame_ = "map";
-            odom_frame_ = "odom";
-            base_frame_ = "base_link";
-
             // 创建定时器进行更新
             timer_ = node->create_wall_timer(
                 std::chrono::milliseconds(20),
@@ -175,8 +170,9 @@ public:
             if (auto node_sp = node_.lock())
             {
                 RCLCPP_INFO(node_sp->get_logger(), "里程计系统初始化完成");
-                RCLCPP_INFO(node_sp->get_logger(), "TF框架: %s -> %s",
-                            odom_frame_.c_str(), base_frame_.c_str());
+                RCLCPP_INFO(node_sp->get_logger(), "TF框架: %s -> %s (%s)",
+                            odom_frame_.c_str(), base_frame_.c_str(),
+                            pub_odom_tf_ ? "enabled" : "disabled");
             }
         }
     }
@@ -197,6 +193,7 @@ public:
         node->declare_parameter<std::string>("map_frame", "map");
         node->declare_parameter<std::string>("odom_frame", "odom");
         node->declare_parameter<std::string>("base_frame", "base_link");
+        node->declare_parameter<bool>("pub_odom_tf", false);
     }
 
     // 加载参数
@@ -214,6 +211,7 @@ public:
             map_frame_ = node_sp->get_parameter_or("map_frame", std::string("map"));
             odom_frame_ = node_sp->get_parameter_or("odom_frame", std::string("odom"));
             base_frame_ = node_sp->get_parameter_or("base_frame", std::string("base_link"));
+            pub_odom_tf_ = node_sp->get_parameter_or("pub_odom_tf", false);
 
             RCLCPP_DEBUG(node_sp->get_logger(), "Parameters loaded successfully");
         }
@@ -511,8 +509,11 @@ private:
             angular = current_angular_velocity_;
         }
 
-        // 1. 发布TF变换 (map->odom->base_link)
-        publishTfTransforms(current_time, x, y, theta);
+        // 1. 按配置发布TF变换，避免和定位/建图链路重复发布 odom -> base。
+        if (pub_odom_tf_)
+        {
+            publishTfTransforms(current_time, x, y, theta);
+        }
 
         // 2. 发布里程计消息
         publishOdomMessage(current_time, x, y, theta, linear, angular);
@@ -572,7 +573,7 @@ private:
         auto odom_msg = std::make_unique<nav_msgs::msg::Odometry>();
         odom_msg->header.stamp = time;
         odom_msg->header.frame_id = odom_frame_; // 坐标系: odom
-        odom_msg->child_frame_id = base_frame_;  // 子坐标系: base_link
+        odom_msg->child_frame_id = base_frame_;
 
         // 位置 (相对于odom坐标系)
         odom_msg->pose.pose.position.x = x;
@@ -666,6 +667,7 @@ private:
     std::string map_frame_ = "map";
     std::string odom_frame_ = "odom";
     std::string base_frame_ = "base_link";
+    bool pub_odom_tf_ = false;
 
     // 初始化控制
     mutable std::mutex init_mutex_;
